@@ -348,3 +348,233 @@ class TestOpenAIEmbeddingModelMocked:
                 model = OpenAIEmbeddingModel(model_name)
                 assert model.embedding_size == expected_size
                 assert model.model == model_name
+
+
+class TestAzureEmbeddingModelMocked:
+    def test_init_with_known_model(self):
+        mock_openai = MagicMock()
+        mock_client = Mock()
+        mock_openai.AzureOpenAI.return_value = mock_client
+
+        with patch.dict("sys.modules", {"openai": mock_openai}):
+            from nemoguardrails.embeddings.providers.azureopenai import (
+                AzureEmbeddingModel,
+            )
+
+            model = AzureEmbeddingModel("text-embedding-ada-002")
+
+            assert model.embedding_model == "text-embedding-ada-002"
+            assert model.embedding_size == 1536
+            assert model.client == mock_client
+            mock_openai.AzureOpenAI.assert_called_once()
+
+    def test_init_with_unknown_model(self):
+        mock_openai = MagicMock()
+        mock_client = Mock()
+        mock_openai.AzureOpenAI.return_value = mock_client
+
+        mock_response = Mock()
+        mock_record = Mock()
+        mock_record.embedding = [0.1] * 2048
+        mock_response.data = [mock_record]
+        mock_client.embeddings.create.return_value = mock_response
+
+        with patch.dict("sys.modules", {"openai": mock_openai}):
+            from nemoguardrails.embeddings.providers.azureopenai import (
+                AzureEmbeddingModel,
+            )
+
+            model = AzureEmbeddingModel("custom-unknown-model")
+
+            assert model.embedding_model == "custom-unknown-model"
+            assert model.embedding_size == 2048
+            mock_client.embeddings.create.assert_called_once_with(
+                model="custom-unknown-model", input=["test"]
+            )
+
+    def test_import_error_when_openai_not_installed(self):
+        with patch.dict("sys.modules", {"openai": None}):
+            with pytest.raises(ImportError, match="Could not import openai"):
+                if "nemoguardrails.embeddings.providers.azureopenai" in sys.modules:
+                    del sys.modules["nemoguardrails.embeddings.providers.azureopenai"]
+
+                from nemoguardrails.embeddings.providers.azureopenai import (
+                    AzureEmbeddingModel,
+                )
+
+                AzureEmbeddingModel("text-embedding-ada-002")
+
+    def test_encode_success(self):
+        mock_openai = MagicMock()
+        mock_client = Mock()
+        mock_openai.AzureOpenAI.return_value = mock_client
+
+        mock_response = Mock()
+        mock_record1 = Mock()
+        expected_embedding1 = [0.1, 0.2, 0.3]
+        mock_record1.embedding = expected_embedding1
+        mock_record2 = Mock()
+        expected_embedding2 = [0.4, 0.5, 0.6]
+        mock_record2.embedding = expected_embedding2
+        mock_response.data = [mock_record1, mock_record2]
+        mock_client.embeddings.create.return_value = mock_response
+
+        with patch.dict("sys.modules", {"openai": mock_openai}):
+            from nemoguardrails.embeddings.providers.azureopenai import (
+                AzureEmbeddingModel,
+            )
+
+            model = AzureEmbeddingModel("text-embedding-ada-002")
+            documents = ["hello world", "test document"]
+            result = model.encode(documents)
+
+            assert result == [expected_embedding1, expected_embedding2]
+            mock_client.embeddings.create.assert_called_with(
+                model="text-embedding-ada-002", input=documents
+            )
+
+    def test_encode_exception_handling(self):
+        mock_openai = MagicMock()
+        mock_client = Mock()
+        mock_openai.AzureOpenAI.return_value = mock_client
+
+        mock_client.embeddings.create.side_effect = Exception("API Error")
+
+        with patch.dict("sys.modules", {"openai": mock_openai}):
+            from nemoguardrails.embeddings.providers.azureopenai import (
+                AzureEmbeddingModel,
+            )
+
+            model = AzureEmbeddingModel("text-embedding-ada-002")
+            documents = ["test"]
+
+            with pytest.raises(RuntimeError, match="Failed to retrieve embeddings"):
+                model.encode(documents)
+
+    @pytest.mark.asyncio
+    async def test_encode_async_success(self):
+        mock_openai = MagicMock()
+        mock_client = Mock()
+        mock_openai.AzureOpenAI.return_value = mock_client
+
+        mock_response = Mock()
+        mock_record = Mock()
+        expected_embedding = [0.1, 0.2, 0.3]
+        mock_record.embedding = expected_embedding
+        mock_response.data = [mock_record]
+        mock_client.embeddings.create.return_value = mock_response
+
+        with patch.dict("sys.modules", {"openai": mock_openai}):
+            from nemoguardrails.embeddings.providers.azureopenai import (
+                AzureEmbeddingModel,
+            )
+
+            model = AzureEmbeddingModel("text-embedding-ada-002")
+            documents = ["async test"]
+            result = await model.encode_async(documents)
+
+            assert result == [expected_embedding]
+            mock_client.embeddings.create.assert_called_once()
+
+    def test_all_predefined_models(self):
+        mock_openai = MagicMock()
+        mock_client = Mock()
+        mock_openai.AzureOpenAI.return_value = mock_client
+
+        models_to_test = {
+            "text-embedding-ada-002": 1536,
+        }
+
+        with patch.dict("sys.modules", {"openai": mock_openai}):
+            from nemoguardrails.embeddings.providers.azureopenai import (
+                AzureEmbeddingModel,
+            )
+
+            for model_name, expected_size in models_to_test.items():
+                model = AzureEmbeddingModel(model_name)
+                assert model.embedding_size == expected_size
+                assert model.embedding_model == model_name
+
+    def test_engine_name_attribute(self):
+        mock_openai = MagicMock()
+        mock_client = Mock()
+        mock_openai.AzureOpenAI.return_value = mock_client
+
+        with patch.dict("sys.modules", {"openai": mock_openai}):
+            from nemoguardrails.embeddings.providers.azureopenai import (
+                AzureEmbeddingModel,
+            )
+
+            model = AzureEmbeddingModel("text-embedding-ada-002")
+
+            assert model.engine_name == "AzureOpenAI"
+
+    def test_encode_empty_document_list(self):
+        mock_openai = MagicMock()
+        mock_client = Mock()
+        mock_openai.AzureOpenAI.return_value = mock_client
+
+        mock_response = Mock()
+        mock_response.data = []
+        mock_client.embeddings.create.return_value = mock_response
+
+        with patch.dict("sys.modules", {"openai": mock_openai}):
+            from nemoguardrails.embeddings.providers.azureopenai import (
+                AzureEmbeddingModel,
+            )
+
+            model = AzureEmbeddingModel("text-embedding-ada-002")
+            result = model.encode([])
+
+            assert result == []
+            mock_client.embeddings.create.assert_called_with(
+                model="text-embedding-ada-002", input=[]
+            )
+
+    def test_init_with_environment_variables(self):
+        mock_openai = MagicMock()
+        mock_client = Mock()
+        mock_openai.AzureOpenAI.return_value = mock_client
+
+        test_env = {
+            "AZURE_OPENAI_API_KEY": "test-key",
+            "AZURE_OPENAI_API_VERSION": "2023-05-15",
+            "AZURE_OPENAI_ENDPOINT": "https://test.openai.azure.com/",
+        }
+
+        with patch.dict("sys.modules", {"openai": mock_openai}):
+            with patch.dict("os.environ", test_env):
+                from nemoguardrails.embeddings.providers.azureopenai import (
+                    AzureEmbeddingModel,
+                )
+
+                model = AzureEmbeddingModel("text-embedding-ada-002")
+
+                mock_openai.AzureOpenAI.assert_called_once_with(
+                    api_key="test-key",
+                    api_version="2023-05-15",
+                    azure_endpoint="https://test.openai.azure.com/",
+                )
+
+    def test_encode_single_document(self):
+        mock_openai = MagicMock()
+        mock_client = Mock()
+        mock_openai.AzureOpenAI.return_value = mock_client
+
+        mock_response = Mock()
+        mock_record = Mock()
+        expected_embedding = [0.1, 0.2, 0.3]
+        mock_record.embedding = expected_embedding
+        mock_response.data = [mock_record]
+        mock_client.embeddings.create.return_value = mock_response
+
+        with patch.dict("sys.modules", {"openai": mock_openai}):
+            from nemoguardrails.embeddings.providers.azureopenai import (
+                AzureEmbeddingModel,
+            )
+
+            model = AzureEmbeddingModel("text-embedding-ada-002")
+            result = model.encode(["single document"])
+
+            assert result == [expected_embedding]
+            assert len(result) == 1
