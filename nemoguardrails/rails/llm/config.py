@@ -35,6 +35,7 @@ from pydantic.fields import Field
 
 from nemoguardrails import utils
 from nemoguardrails.colang import parse_colang_file, parse_flow_elements
+from nemoguardrails.colang.v1_0.runtime.flows import _normalize_flow_id
 from nemoguardrails.colang.v2_x.lang.utils import format_colang_parsing_error_message
 from nemoguardrails.colang.v2_x.runtime.errors import ColangParsingError
 from nemoguardrails.llm.types import Task
@@ -1451,7 +1452,65 @@ class RailsConfig(BaseModel):
         description="Configuration for tracing.",
     )
 
-    @root_validator(pre=True, allow_reuse=True)
+    @root_validator(pre=True)
+    def check_model_exists_for_input_rails(cls, values):
+        """Make sure we have a model for each input rail where one is provided using $model=<model_type>"""
+        rails = values.get("rails", {})
+        input_flows = rails.get("input", {}).get("flows", [])
+
+        # If no flows have a model, early-out
+        input_flows_without_model = [
+            _get_flow_model(flow) is None for flow in input_flows
+        ]
+        if all(input_flows_without_model):
+            return values
+
+        models = values.get("models", []) or []
+        model_types = {
+            model.type if isinstance(model, Model) else model["type"]
+            for model in models
+        }
+
+        for flow in input_flows:
+            flow_model = _get_flow_model(flow)
+            if not flow_model:
+                continue
+            if flow_model not in model_types:
+                raise ValueError(
+                    f"No `{flow_model}` model provided for input flow `{_normalize_flow_id(flow)}`"
+                )
+        return values
+
+    @root_validator(pre=True)
+    def check_model_exists_for_output_rails(cls, values):
+        """Make sure we have a model for each output rail where one is provided using $model=<model_type>"""
+        rails = values.get("rails", {})
+        output_flows = rails.get("output", {}).get("flows", [])
+
+        # If no flows have a model, early-out
+        output_flows_without_model = [
+            _get_flow_model(flow) is None for flow in output_flows
+        ]
+        if all(output_flows_without_model):
+            return values
+
+        models = values.get("models", []) or []
+        model_types = {
+            model.type if isinstance(model, Model) else model["type"]
+            for model in models
+        }
+
+        for flow in output_flows:
+            flow_model = _get_flow_model(flow)
+            if not flow_model:
+                continue
+            if flow_model not in model_types:
+                raise ValueError(
+                    f"No `{flow_model}` model provided for output flow `{_normalize_flow_id(flow)}`"
+                )
+        return values
+
+    @root_validator(pre=True)
     def check_prompt_exist_for_self_check_rails(cls, values):
         rails = values.get("rails", {})
         prompts = values.get("prompts", []) or []
@@ -1476,6 +1535,16 @@ class RailsConfig(BaseModel):
             raise ValueError(
                 "You must provide a `llama_guard_check_input` prompt template."
             )
+
+        # Only content-safety and topic-safety include a $model reference in the rail flow text
+        # Need to match rails with flow_id (excluding $model reference) and match prompts
+        # on the full flow_id (including $model reference)
+        _validate_rail_prompts(
+            enabled_input_rails, provided_task_prompts, "content safety check input"
+        )
+        _validate_rail_prompts(
+            enabled_input_rails, provided_task_prompts, "topic safety check input"
+        )
 
         # Output moderation prompt verification
         if (
@@ -1503,6 +1572,13 @@ class RailsConfig(BaseModel):
             and "self_check_facts" not in provided_task_prompts
         ):
             raise ValueError("You must provide a `self_check_facts` prompt template.")
+
+        # Only content-safety and topic-safety include a $model reference in the rail flow text
+        # Need to match rails with flow_id (excluding $model reference) and match prompts
+        # on the full flow_id (including $model reference)
+        _validate_rail_prompts(
+            enabled_output_rails, provided_task_prompts, "content safety check output"
+        )
 
         return values
 
@@ -1833,3 +1909,28 @@ def _generate_rails_flows(flows):
         flow_definitions.insert(1, _LIBRARY_IMPORT + _NEWLINE * 2)
 
     return flow_definitions
+
+
+MODEL_PREFIX = "$model="
+
+
+def _get_flow_model(flow_text) -> Optional[str]:
+    """Helper to return a model name from a flow definition"""
+    if MODEL_PREFIX not in flow_text:
+        return None
+    return flow_text.split(MODEL_PREFIX)[-1].strip()
+
+
+def _validate_rail_prompts(
+    rails: list[str], prompts: list[Any], validation_rail: str
+) -> None:
+    for rail in rails:
+        flow_id = _normalize_flow_id(rail)
+        flow_model = _get_flow_model(rail)
+        if flow_id == validation_rail:
+            prompt_flow_id = flow_id.replace(" ", "_")
+            expected_prompt = f"{prompt_flow_id} $model={flow_model}"
+            if expected_prompt not in prompts:
+                raise ValueError(
+                    f"You must provide a `{expected_prompt}` prompt template."
+                )
