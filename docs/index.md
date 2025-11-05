@@ -61,8 +61,7 @@ user-guides/advanced/event-based-api
 user-guides/advanced/llama-guard-deployment
 user-guides/advanced/nested-async-loop
 user-guides/advanced/vertexai-setup
-user-guides/advanced/nemoguard-contentsafety-deployment
-user-guides/advanced/nemotron-content-safety-multilingual-deployment
+user-guides/advanced/nemotron-safety-guard-deployment
 user-guides/advanced/nemoguard-topiccontrol-deployment
 user-guides/advanced/nemoguard-jailbreakdetect-deployment
 user-guides/advanced/kv-cache-reuse
