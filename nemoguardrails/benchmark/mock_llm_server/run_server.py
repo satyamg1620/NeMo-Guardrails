@@ -71,7 +71,12 @@ def parse_arguments():
     parser.add_argument(
         "--config-file", help=".env file to configure model", required=True
     )
-
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=1,
+        help="Number of uvicorn worker processes (default: 1)",
+    )
     return parser.parse_args()
 
 
@@ -104,12 +109,13 @@ def main():  # pragma: no cover
 
     try:
         uvicorn.run(
-            "api:app",
+            "nemoguardrails.benchmark.mock_llm_server.api:app",
             host=args.host,
             port=args.port,
             reload=args.reload,
             log_level=args.log_level,
             env_file=config_file,
+            workers=args.workers,
         )
     except KeyboardInterrupt:
         log.info("\nServer stopped by user")
