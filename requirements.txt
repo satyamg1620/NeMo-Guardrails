@@ -369,7 +369,7 @@ sqlalchemy==2.0.43
     # via
     #   langchain
     #   langchain-community
-srsly==2.5.1
+srsly==2.5.2
     # via
     #   confection
     #   spacy
