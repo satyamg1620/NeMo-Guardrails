@@ -59,7 +59,8 @@ spec:
         {
           "type": "pip", 
           "path": ".konflux/", 
-          "requirements_files": ["requirements-extra.txt"]
+          "requirements_files": ["requirements-extra.txt"],
+          "requirements_build_files": ["requirements-extra-build.txt"]
         }, 
         {"type": "generic", "path": "."}
       ]
