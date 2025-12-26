@@ -111,7 +111,7 @@ huggingface-hub==0.35.1
     #   transformers
 humanfriendly==10.0
     # via coloredlogs
-idna==3.10
+idna==3.11
     # via
     #   anyio
     #   httpx
