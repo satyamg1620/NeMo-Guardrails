@@ -135,7 +135,7 @@ jsonpatch==1.33
     # via langchain-core
 jsonpointer==3.0.0
     # via jsonpatch
-langchain==0.3.27
+langchain==1.2.6
     # via
     #   nemoguardrails (pyproject.toml)
     #   langchain-community
